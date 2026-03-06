@@ -39,6 +39,7 @@ const initialGoals: Goal[] = [
     description: '保持健康体魄',
     icon: '🏃',
     targetDays: 100,
+    durationMinutes: 30,
     category: 'health',
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -48,6 +49,7 @@ const initialGoals: Goal[] = [
     description: '早睡早起身体好',
     icon: '🌅',
     targetDays: 30,
+    durationMinutes: 10,
     category: 'lifestyle',
     createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -57,6 +59,7 @@ const initialGoals: Goal[] = [
     description: '每天读书充实自己',
     icon: '📚',
     targetDays: 60,
+    durationMinutes: 60,
     category: 'study',
     createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
   },
@@ -605,7 +608,42 @@ export const groupStore = {
   joinChallenge: (challengeId: string, userId: string) => {
     groupChallenges = groupChallenges.map((c) => {
       if (c.id === challengeId && !c.participants.includes(userId)) {
-        return { ...c, participants: [...c.participants, userId] };
+        const updated = { ...c, participants: [...c.participants, userId] };
+
+        // 为参加活动的用户在“我的目标”中创建一个对应主题目标（若尚未创建）
+        const existingGoalId = `challenge-goal-${c.id}-${userId}`;
+        const existingGoal = goals.find((g) => g.id === existingGoalId);
+
+        if (!existingGoal) {
+          const startDate = new Date(c.startDate);
+          const endDate = new Date(c.endDate);
+          const totalDays =
+            Math.max(
+              1,
+              Math.ceil(
+                (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+              ),
+            ) || 1;
+
+          const group = groups.find((g) => g.id === c.groupId);
+          const now = new Date().toISOString();
+
+          const goal: Goal = {
+            id: existingGoalId,
+            title: c.title,
+            description: c.description,
+            icon: group?.avatar || '🏆',
+            targetDays: totalDays,
+            durationMinutes: 30,
+            category: 'general',
+            createdAt: now,
+            userId,
+          };
+
+          goals = [...goals, goal];
+        }
+
+        return updated;
       }
       return c;
     });

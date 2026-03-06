@@ -13,6 +13,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
+import { useAuth } from '../authContext';
 
 const groupAvatars = ['🌅', '💪', '📚', '🏃', '🧘', '✍️', '🎯', '🎨', '⚡', '🌟'];
 
@@ -22,6 +23,7 @@ export default function Groups() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const currentUser = dataStore.getCurrentUser();
+  const { isAuthenticated } = useAuth();
   
   const [newGroup, setNewGroup] = useState({
     name: '',
@@ -31,8 +33,13 @@ export default function Groups() {
   });
   
   useEffect(() => {
+    if (!isAuthenticated) {
+      setMyGroups([]);
+      setAllGroups([]);
+      return;
+    }
     loadGroups();
-  }, []);
+  }, [isAuthenticated]);
   
   const loadGroups = () => {
     const userGroups = groupStore.getUserGroups(currentUser.id);
@@ -114,88 +121,94 @@ export default function Groups() {
               <h1 className="text-2xl font-bold">打卡群组</h1>
               <p className="text-blue-100 text-sm">找到志同道合的小伙伴</p>
             </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="secondary" className="gap-1">
-                  <Plus className="w-4 h-4" />
-                  创建群组
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>创建新群组</DialogTitle>
-                  <DialogDescription>
-                    创建一个打卡群组，邀请好友一起互相监督
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div>
-                    <Label>选择头像</Label>
-                    <div className="grid grid-cols-5 gap-2 mt-2">
-                      {groupAvatars.map((avatar) => (
-                        <button
-                          key={avatar}
-                          onClick={() => setNewGroup({ ...newGroup, avatar })}
-                          className={`text-3xl p-2 rounded-lg transition-colors ${
-                            newGroup.avatar === avatar
-                              ? 'bg-blue-100 ring-2 ring-blue-500'
-                              : 'hover:bg-gray-100'
-                          }`}
-                        >
-                          {avatar}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="name">群组名称</Label>
-                    <Input
-                      id="name"
-                      placeholder="例如：早起打卡团"
-                      value={newGroup.name}
-                      onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="description">群组描述</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="介绍一下群组的目标..."
-                      value={newGroup.description}
-                      onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="category">分类</Label>
-                    <Select
-                      value={newGroup.category}
-                      onValueChange={(value: Group['category']) =>
-                        setNewGroup({ ...newGroup, category: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="general">综合</SelectItem>
-                        <SelectItem value="health">健康</SelectItem>
-                        <SelectItem value="study">学习</SelectItem>
-                        <SelectItem value="work">工作</SelectItem>
-                        <SelectItem value="lifestyle">生活方式</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <Button onClick={handleCreateGroup} className="w-full">
+            {isAuthenticated ? (
+              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="secondary" className="gap-1">
+                    <Plus className="w-4 h-4" />
                     创建群组
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>创建新群组</DialogTitle>
+                    <DialogDescription>
+                      创建一个打卡群组，邀请好友一起互相监督
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Label>选择头像</Label>
+                      <div className="grid grid-cols-5 gap-2 mt-2">
+                        {groupAvatars.map((avatar) => (
+                          <button
+                            key={avatar}
+                            onClick={() => setNewGroup({ ...newGroup, avatar })}
+                            className={`text-3xl p-2 rounded-lg transition-colors ${
+                              newGroup.avatar === avatar
+                                ? 'bg-blue-100 ring-2 ring-blue-500'
+                                : 'hover:bg-gray-100'
+                            }`}
+                          >
+                            {avatar}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="name">群组名称</Label>
+                      <Input
+                        id="name"
+                        placeholder="例如：早起打卡团"
+                        value={newGroup.name}
+                        onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="description">群组描述</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="介绍一下群组的目标..."
+                        value={newGroup.description}
+                        onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="category">分类</Label>
+                      <Select
+                        value={newGroup.category}
+                        onValueChange={(value: Group['category']) =>
+                          setNewGroup({ ...newGroup, category: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="general">综合</SelectItem>
+                          <SelectItem value="health">健康</SelectItem>
+                          <SelectItem value="study">学习</SelectItem>
+                          <SelectItem value="work">工作</SelectItem>
+                          <SelectItem value="lifestyle">生活方式</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <Button onClick={handleCreateGroup} className="w-full">
+                      创建群组
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/login">登录后创建群组</Link>
+              </Button>
+            )}
           </div>
           
           <div className="relative">
@@ -214,12 +227,25 @@ export default function Groups() {
       <div className="max-w-md mx-auto px-4 py-4">
         <Tabs defaultValue="my" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="my">我的群组 ({myGroups.length})</TabsTrigger>
+            <TabsTrigger value="my">
+              我的群组 {isAuthenticated ? `(${myGroups.length})` : ''}
+            </TabsTrigger>
             <TabsTrigger value="discover">发现群组</TabsTrigger>
           </TabsList>
           
           <TabsContent value="my" className="space-y-3">
-            {myGroups.length === 0 ? (
+            {!isAuthenticated ? (
+              <Card className="p-12 text-center">
+                <div className="text-6xl mb-4">👥</div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">游客模式</h3>
+                <p className="text-gray-500 mb-4">
+                  登录后可以查看你加入的群组，并和大家一起打卡。
+                </p>
+                <Button asChild>
+                  <Link to="/login">去登录</Link>
+                </Button>
+              </Card>
+            ) : myGroups.length === 0 ? (
               <Card className="p-12 text-center">
                 <div className="text-6xl mb-4">👥</div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">还没有加入群组</h3>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router';
+import { useParams, Link, useNavigate } from 'react-router';
 import { ArrowLeft, Send, Trophy, BarChart3, MessageCircle, Plus, Crown, Medal, Award } from 'lucide-react';
 import { groupStore, dataStore } from '../data/mockData';
 import { Group, GroupMessage, GroupChallenge, MemberDailyStats } from '../types';
@@ -13,6 +13,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
+import { useAuth } from '../authContext';
 
 export default function GroupDetail() {
   const { groupId } = useParams();
@@ -24,6 +25,8 @@ export default function GroupDetail() {
   const [isCreateChallengeOpen, setIsCreateChallengeOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentUser = dataStore.getCurrentUser();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   
   const [newChallenge, setNewChallenge] = useState({
     title: '',
@@ -99,7 +102,7 @@ export default function GroupDetail() {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       creatorId: currentUser.id,
-      participants: [currentUser.id],
+      participants: [],
       status: 'active',
     };
     
@@ -118,12 +121,37 @@ export default function GroupDetail() {
   const handleJoinChallenge = (challengeId: string) => {
     groupStore.joinChallenge(challengeId, currentUser.id);
     loadGroupData();
-    toast.success('参加活动成功！');
+    toast.success('参加活动成功！已为你创建对应的目标');
+    navigate('/goals');
   };
   
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor(
+      (startOfToday.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    const timePart = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+    if (diffDays === 0) {
+      // 今天：只显示时间
+      return timePart;
+    }
+    if (diffDays === 1) {
+      // 昨天
+      return `昨天 ${timePart}`;
+    }
+    if (diffDays > 1 && diffDays < 7) {
+      // 前 2-6 天，用“X天前 + 时间”
+      return `${diffDays}天前 ${timePart}`;
+    }
+
+    // 一周及以前：显示具体日期 + 时间
+    const datePart = date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+    return `${datePart} ${timePart}`;
   };
   
   const formatDate = (dateString: string) => {
@@ -155,6 +183,30 @@ export default function GroupDetail() {
     return badges[status];
   };
   
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">请登录后查看群组详情</h1>
+          <p className="text-sm text-gray-500 mb-6">
+            群聊、统计和活动都属于成员的个人数据，游客模式下不会展示。
+          </p>
+          <div className="space-y-3">
+            <Button className="w-full" asChild>
+              <Link to="/login">登录</Link>
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <Link to="/register">注册新账号</Link>
+            </Button>
+            <Button variant="ghost" className="w-full" asChild>
+              <Link to="/groups">返回群组列表</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!group) {
     return (
       <div className="min-h-screen flex items-center justify-center">

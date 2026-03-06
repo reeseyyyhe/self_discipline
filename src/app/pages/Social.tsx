@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { Heart, MessageCircle, Send, Flame } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { dataStore } from '../data/mockData';
@@ -7,6 +8,7 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
+import { useAuth } from '../authContext';
 
 const moodEmojis = {
   great: '😄',
@@ -19,10 +21,16 @@ export default function Social() {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const currentUser = dataStore.getCurrentUser();
+  const { isAuthenticated } = useAuth();
   
   useEffect(() => {
+    if (!isAuthenticated) {
+      setPosts([]);
+      setCommentInputs({});
+      return;
+    }
     loadPosts();
-  }, []);
+  }, [isAuthenticated]);
   
   const loadPosts = () => {
     setPosts(dataStore.getSocialPosts());
@@ -61,9 +69,9 @@ export default function Social() {
     if (diffMins < 1) return '刚刚';
     if (diffMins < 60) return `${diffMins}分钟前`;
     if (diffHours < 24) return `${diffHours}小时前`;
-    if (diffDays < 7) return `${diffDays}天前`;
     
-    return postTime.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+    // 一天以上：显示确切日期
+    return postTime.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
   };
   
   return (
@@ -78,7 +86,18 @@ export default function Social() {
       
       {/* Posts Feed */}
       <div className="max-w-md mx-auto px-4 py-4">
-        {posts.length === 0 ? (
+        {!isAuthenticated ? (
+          <Card className="p-12 text-center">
+            <div className="text-6xl mb-4">👥</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">游客模式</h3>
+            <p className="text-gray-500 mb-4">
+              好友圈展示你和朋友的打卡动态。登录后可以看到彼此的坚持。
+            </p>
+            <Button asChild>
+              <Link to="/login">去登录</Link>
+            </Button>
+          </Card>
+        ) : posts.length === 0 ? (
           <Card className="p-12 text-center">
             <div className="text-6xl mb-4">👥</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">暂无动态</h3>

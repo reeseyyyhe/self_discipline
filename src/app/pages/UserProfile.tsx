@@ -8,6 +8,7 @@ import { Card } from '../components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Badge } from '../components/ui/badge';
+import { useAuth } from '../authContext';
 
 export default function UserProfile() {
   const { userId } = useParams();
@@ -23,6 +24,7 @@ export default function UserProfile() {
     completionRate: 0,
   });
   
+  const { isAuthenticated } = useAuth();
   const currentUser = dataStore.getCurrentUser();
   const isCurrentUser = userId === currentUser.id;
   
@@ -136,6 +138,27 @@ export default function UserProfile() {
     return emojis[mood as keyof typeof emojis] || '😊';
   };
   
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">请登录后查看用户主页</h1>
+          <p className="text-sm text-gray-500 mb-6">
+            用户主页包含个人打卡记录和群组信息，游客模式下不展示这些内容。
+          </p>
+          <div className="space-y-3">
+            <Button className="w-full" asChild>
+              <Link to="/login">登录</Link>
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <Link to="/register">注册新账号</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">

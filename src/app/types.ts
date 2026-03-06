@@ -4,6 +4,7 @@ export interface User {
   avatar: string;
   bio?: string;
   email?: string;
+  phone?: string;
   createdAt?: string;
 }
 
@@ -13,6 +14,10 @@ export interface Goal {
   description: string;
   icon: string;
   targetDays: number;
+  /**
+   * 每次完成目标预计用时（单位：分钟）
+   */
+  durationMinutes: number;
   category: 'health' | 'study' | 'work' | 'lifestyle' | 'general';
   createdAt: string;
   userId?: string;

@@ -6,11 +6,22 @@ import GroupDetail from "./pages/GroupDetail";
 import Social from "./pages/Social";
 import Profile from "./pages/Profile";
 import UserProfile from "./pages/UserProfile";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Settings from "./pages/Settings";
 
 export const router = createBrowserRouter([
   {
     path: "/",
     Component: Home,
+  },
+  {
+    path: "/login",
+    Component: Login,
+  },
+  {
+    path: "/register",
+    Component: Register,
   },
   {
     path: "/goals",
@@ -31,6 +42,10 @@ export const router = createBrowserRouter([
   {
     path: "/profile",
     Component: Profile,
+  },
+  {
+    path: "/settings",
+    Component: Settings,
   },
   {
     path: "/user/:userId",

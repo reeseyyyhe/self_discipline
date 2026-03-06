@@ -1,14 +1,50 @@
 import { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Users, Award, TrendingUp } from 'lucide-react';
+import { Link } from 'react-router';
+import { Calendar as CalendarIcon, Users, Award, TrendingUp, Settings as SettingsIcon } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { dataStore } from '../data/mockData';
 import { User, Goal, CheckIn } from '../types';
 import { Card } from '../components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Button } from '../components/ui/button';
+import { useAuth } from '../authContext';
 
 export default function Profile() {
-  const [currentUser] = useState<User>(dataStore.getCurrentUser());
+  const { isAuthenticated, user: authUser } = useAuth();
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 pb-20">
+        <div className="max-w-md mx-auto px-4 py-16 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">请登录</h1>
+          <p className="text-sm text-gray-500 mb-6">
+            当前为游客模式，登录后可以同步你的自律数据、查看完整统计。
+          </p>
+          <div className="space-y-3">
+            <Button className="w-full" asChild>
+              <Link to="/login">登录</Link>
+            </Button>
+            <Button variant="outline" className="w-full" asChild>
+              <Link to="/register">注册新账号</Link>
+            </Button>
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  const baseUser = dataStore.getCurrentUser();
+  const mergedUser: User = authUser
+    ? {
+        ...baseUser,
+        ...authUser,
+        id: baseUser.id,
+      }
+    : baseUser;
+
+  const [currentUser] = useState<User>(mergedUser);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [friends] = useState<User[]>(dataStore.getUsers().filter((u) => u.id !== currentUser.id));
@@ -82,15 +118,27 @@ export default function Profile() {
       {/* Header */}
       <div className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
         <div className="max-w-md mx-auto px-4 py-8">
-          <div className="flex items-center gap-4 mb-6">
-            <Avatar className="w-20 h-20 ring-4 ring-white/30">
-              <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
-              <AvatarFallback>{currentUser.name[0]}</AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="text-2xl font-bold mb-1">{currentUser.name}</h1>
-              <p className="text-blue-100">{currentUser.bio}</p>
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <Avatar className="w-20 h-20 ring-4 ring-white/30">
+                <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
+                <AvatarFallback>{currentUser.name[0]}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h1 className="text-2xl font-bold mb-1">{currentUser.name}</h1>
+                <p className="text-blue-100">{currentUser.bio}</p>
+              </div>
             </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="text-white hover:bg-white/15 rounded-full"
+              asChild
+            >
+              <Link to="/settings">
+                <SettingsIcon className="w-5 h-5" />
+              </Link>
+            </Button>
           </div>
           
           {/* Stats */}

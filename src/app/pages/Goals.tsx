@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import { Target, Plus, TrendingUp, Calendar, Trash2, Circle, CheckCircle, MessageSquare, Pencil } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { dataStore, groupStore } from '../data/mockData';
@@ -12,6 +13,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
+import { useAuth } from '../authContext';
 
 const emojiOptions = ['🏃', '🌅', '📚', '💪', '🧘', '✍️', '🎯', '🎨', '🎵', '🍎', '💧', '🚴'];
 
@@ -30,6 +32,7 @@ export default function Goals() {
     description: '',
     icon: '🎯',
     targetDays: 30,
+    durationMinutes: 30,
     category: 'lifestyle' as Goal['category'],
   });
   const [editGoal, setEditGoal] = useState({
@@ -37,6 +40,7 @@ export default function Goals() {
     description: '',
     icon: '🎯',
     targetDays: 30,
+    durationMinutes: 30,
     category: 'lifestyle' as Goal['category'],
   });
   
@@ -45,10 +49,16 @@ export default function Goals() {
     mood: 'good' as CheckIn['mood'],
     shareToGroups: [] as string[],
   });
+  const { isAuthenticated } = useAuth();
   
   useEffect(() => {
+    if (!isAuthenticated) {
+      setGoals([]);
+      setCheckIns([]);
+      return;
+    }
     loadData();
-  }, []);
+  }, [isAuthenticated]);
   
   const loadData = () => {
     const allGoals = dataStore.getGoals();
@@ -79,6 +89,9 @@ export default function Goals() {
       description: newGoal.description,
       icon: newGoal.icon,
       targetDays: newGoal.targetDays,
+      durationMinutes: Number.isFinite(newGoal.durationMinutes) && newGoal.durationMinutes > 0
+        ? newGoal.durationMinutes
+        : 30,
       category: newGoal.category,
       createdAt: new Date().toISOString(),
     };
@@ -91,6 +104,7 @@ export default function Goals() {
       description: '',
       icon: '🎯',
       targetDays: 30,
+      durationMinutes: 30,
       category: 'lifestyle',
     });
     toast.success('目标添加成功！');
@@ -188,6 +202,7 @@ export default function Goals() {
       description: goal.description,
       icon: goal.icon,
       targetDays: goal.targetDays,
+      durationMinutes: goal.durationMinutes ?? 30,
       category: goal.category,
     });
     setIsEditDialogOpen(true);
@@ -205,6 +220,10 @@ export default function Goals() {
       description: editGoal.description,
       icon: editGoal.icon,
       targetDays: editGoal.targetDays,
+      durationMinutes:
+        Number.isFinite(editGoal.durationMinutes) && editGoal.durationMinutes > 0
+          ? editGoal.durationMinutes
+          : editingGoal.durationMinutes,
       category: editGoal.category,
     });
     loadData();
@@ -212,7 +231,7 @@ export default function Goals() {
     setEditingGoal(null);
     toast.success('目标已更新');
   };
-  
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
@@ -220,106 +239,156 @@ export default function Goals() {
         <div className="max-w-md mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-gray-900">我的目标</h1>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-1">
-                  <Plus className="w-4 h-4" />
-                  添加目标
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>添加新目标</DialogTitle>
-                  <DialogDescription>
-                    创建一个新的自律目标，设定天数并开始坚持
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div>
-                    <Label>选择图标</Label>
-                    <div className="grid grid-cols-6 gap-2 mt-2">
-                      {emojiOptions.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => setNewGoal({ ...newGoal, icon: emoji })}
-                          className={`text-3xl p-2 rounded-lg transition-colors ${
-                            newGoal.icon === emoji
-                              ? 'bg-blue-100 ring-2 ring-blue-500'
-                              : 'hover:bg-gray-100'
-                          }`}
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="title">目标名称</Label>
-                    <Input
-                      id="title"
-                      placeholder="例如：每天运动30分钟"
-                      value={newGoal.title}
-                      onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="description">目标描述</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="添加一些描述..."
-                      value={newGoal.description}
-                      onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="category">分类</Label>
-                    <Select
-                      value={newGoal.category}
-                      onValueChange={(value: Goal['category']) =>
-                        setNewGoal({ ...newGoal, category: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="health">健康</SelectItem>
-                        <SelectItem value="study">学习</SelectItem>
-                        <SelectItem value="work">工作</SelectItem>
-                        <SelectItem value="lifestyle">生活方式</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="targetDays">目标天数</Label>
-                    <Input
-                      id="targetDays"
-                      type="number"
-                      min="1"
-                      value={newGoal.targetDays}
-                      onChange={(e) =>
-                        setNewGoal({ ...newGoal, targetDays: parseInt(e.target.value) || 30 })
-                      }
-                    />
-                  </div>
-                  
-                  <Button onClick={handleAddGoal} className="w-full">
-                    创建目标
+            {isAuthenticated ? (
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1">
+                    <Plus className="w-4 h-4" />
+                    添加目标
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>添加新目标</DialogTitle>
+                    <DialogDescription>
+                      创建一个新的自律目标，设定天数并开始坚持
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Label>选择图标</Label>
+                      <div className="grid grid-cols-6 gap-2 mt-2">
+                        {emojiOptions.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => setNewGoal({ ...newGoal, icon: emoji })}
+                            className={`text-3xl p-2 rounded-lg transition-colors ${
+                              newGoal.icon === emoji
+                                ? 'bg-blue-100 ring-2 ring-blue-500'
+                                : 'hover:bg-gray-100'
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="title">目标名称</Label>
+                      <Input
+                        id="title"
+                        placeholder="例如：每天运动30分钟"
+                        value={newGoal.title}
+                        onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="description">目标描述</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="添加一些描述..."
+                        value={newGoal.description}
+                        onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="category">分类</Label>
+                      <Select
+                        value={newGoal.category}
+                        onValueChange={(value: Goal['category']) =>
+                          setNewGoal({ ...newGoal, category: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="health">健康</SelectItem>
+                          <SelectItem value="study">学习</SelectItem>
+                          <SelectItem value="work">工作</SelectItem>
+                          <SelectItem value="lifestyle">生活方式</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="targetDays">目标天数</Label>
+                      <Input
+                        id="targetDays"
+                        type="number"
+                        min="1"
+                        value={newGoal.targetDays}
+                        onChange={(e) =>
+                          setNewGoal({ ...newGoal, targetDays: parseInt(e.target.value) || 30 })
+                        }
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label>每次完成预计用时</Label>
+                      <div className="mt-2 flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          className="w-20"
+                          value={Math.floor(newGoal.durationMinutes / 60)}
+                          onChange={(e) => {
+                            const hours = parseInt(e.target.value) || 0;
+                            const mins = newGoal.durationMinutes % 60;
+                            setNewGoal({ ...newGoal, durationMinutes: hours * 60 + mins });
+                          }}
+                        />
+                        <span className="text-sm text-gray-600">小时</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          className="w-20"
+                          value={newGoal.durationMinutes % 60}
+                          onChange={(e) => {
+                            let mins = parseInt(e.target.value) || 0;
+                            if (mins < 0) mins = 0;
+                            if (mins > 59) mins = 59;
+                            const hours = Math.floor(newGoal.durationMinutes / 60);
+                            setNewGoal({ ...newGoal, durationMinutes: hours * 60 + mins });
+                          }}
+                        />
+                        <span className="text-sm text-gray-600">分钟</span>
+                      </div>
+                    </div>
+                    
+                    <Button onClick={handleAddGoal} className="w-full">
+                      创建目标
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/login">登录后添加目标</Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>
       
       {/* Goals List */}
       <div className="max-w-md mx-auto px-4 py-6">
-        {goals.length === 0 ? (
+        {!isAuthenticated ? (
+          <Card className="p-12 text-center">
+            <div className="text-6xl mb-4">🎯</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">游客模式</h3>
+            <p className="text-gray-500 mb-4">
+              登录后可以创建和管理你的自律目标，并记录每日打卡。
+            </p>
+            <Button asChild>
+              <Link to="/login">去登录</Link>
+            </Button>
+          </Card>
+        ) : goals.length === 0 ? (
           <Card className="p-12 text-center">
             <div className="text-6xl mb-4">🎯</div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">还没有目标</h3>
@@ -621,6 +690,39 @@ export default function Goals() {
                   })
                 }
               />
+            </div>
+            
+            <div>
+              <Label>每次完成预计用时</Label>
+              <div className="mt-2 flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  className="w-20"
+                  value={Math.floor(editGoal.durationMinutes / 60)}
+                  onChange={(e) => {
+                    const hours = parseInt(e.target.value) || 0;
+                    const mins = editGoal.durationMinutes % 60;
+                    setEditGoal({ ...editGoal, durationMinutes: hours * 60 + mins });
+                  }}
+                />
+                <span className="text-sm text-gray-600">小时</span>
+                <Input
+                  type="number"
+                  min="0"
+                  max="59"
+                  className="w-20"
+                  value={editGoal.durationMinutes % 60}
+                  onChange={(e) => {
+                    let mins = parseInt(e.target.value) || 0;
+                    if (mins < 0) mins = 0;
+                    if (mins > 59) mins = 59;
+                    const hours = Math.floor(editGoal.durationMinutes / 60);
+                    setEditGoal({ ...editGoal, durationMinutes: hours * 60 + mins });
+                  }}
+                />
+                <span className="text-sm text-gray-600">分钟</span>
+              </div>
             </div>
             
             <Button onClick={handleUpdateGoal} className="w-full">
