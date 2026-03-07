@@ -1,3 +1,5 @@
+// Supabase Edge Function 运行在 Deno，IDE 用 Node/TS 检查会报错，此处仅跳过类型检查
+// @ts-nocheck
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
