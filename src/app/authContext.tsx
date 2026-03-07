@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { User } from './types';
+import { setDevUserId, api } from './data/apiClient';
 
 type AuthUser = User | null;
 
@@ -40,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(stored) as User;
         setUser(parsed);
+        setDevUserId(parsed.id);
+        void syncUserToServer(parsed);
       } catch {
         // ignore parse error and clear bad data
         window.localStorage.removeItem(STORAGE_KEY);
@@ -47,12 +50,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const syncUserToServer = async (u: User) => {
+    try {
+      await api.updateUser(u.id, {
+        name: u.name,
+        avatar: u.avatar,
+        bio: u.bio,
+        email: u.email,
+        phone: u.phone,
+      });
+    } catch (e) {
+      // 同步失败时仅记录日志，不打断前端登录流程
+      console.error('同步用户到服务端失败', e);
+    }
+  };
+
   const persistUser = (nextUser: AuthUser) => {
     setUser(nextUser);
     if (nextUser) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+      setDevUserId(nextUser.id);
+      void syncUserToServer(nextUser);
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
+      setDevUserId(null);
     }
   };
 

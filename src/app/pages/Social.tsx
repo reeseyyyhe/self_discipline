@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Heart, MessageCircle, Send, Flame } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { dataStore } from '../data/mockData';
-import { SocialPost, Comment } from '../types';
+import { SocialPost } from '../types';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 import { useAuth } from '../authContext';
+import { api } from '../data/apiClient';
+import { toast } from 'sonner';
 
 const moodEmojis = {
   great: '😄',
@@ -20,8 +21,7 @@ const moodEmojis = {
 export default function Social() {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
-  const currentUser = dataStore.getCurrentUser();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   
   useEffect(() => {
     if (!isAuthenticated) {
@@ -32,30 +32,41 @@ export default function Social() {
     loadPosts();
   }, [isAuthenticated]);
   
-  const loadPosts = () => {
-    setPosts(dataStore.getSocialPosts());
+  const loadPosts = async () => {
+    try {
+      const data = await api.getSocialPosts();
+      setPosts(data);
+    } catch (error) {
+      console.error('加载好友圈失败', error);
+      toast.error('加载好友圈失败，请稍后再试');
+      setPosts([]);
+    }
   };
   
-  const handleLike = (postId: string) => {
-    dataStore.likePost(postId, currentUser.id);
-    loadPosts();
+  const handleLike = async (postId: string) => {
+    if (!user) return;
+    try {
+      await api.likePost(postId);
+      await loadPosts();
+    } catch (error) {
+      console.error('点赞失败', error);
+      toast.error('点赞失败，请稍后再试');
+    }
   };
   
-  const handleComment = (postId: string) => {
+  const handleComment = async (postId: string) => {
+    if (!user) return;
     const content = commentInputs[postId]?.trim();
     if (!content) return;
     
-    const comment: Omit<Comment, 'id'> = {
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      content,
-      timestamp: new Date().toISOString(),
-    };
-    
-    dataStore.addComment(postId, comment);
-    setCommentInputs({ ...commentInputs, [postId]: '' });
-    loadPosts();
+    try {
+      await api.addComment(postId, content);
+      setCommentInputs({ ...commentInputs, [postId]: '' });
+      await loadPosts();
+    } catch (error) {
+      console.error('评论失败', error);
+      toast.error('评论失败，请稍后再试');
+    }
   };
   
   const formatTime = (timestamp: string) => {
@@ -108,7 +119,7 @@ export default function Social() {
         ) : (
           <div className="space-y-4">
             {posts.map((post) => {
-              const isLiked = post.likes.includes(currentUser.id);
+              const isLiked = user ? post.likes.includes(user.id) : false;
               const showComments = post.comments.length > 0;
               
               return (

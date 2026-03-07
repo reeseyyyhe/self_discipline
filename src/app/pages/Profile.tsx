@@ -9,6 +9,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../authContext';
+import { api } from '../data/apiClient';
+import { toast } from 'sonner';
 
 export default function Profile() {
   const { isAuthenticated, user: authUser } = useAuth();
@@ -50,11 +52,25 @@ export default function Profile() {
   const [friends] = useState<User[]>(dataStore.getUsers().filter((u) => u.id !== currentUser.id));
   
   useEffect(() => {
-    const allGoals = dataStore.getGoals();
-    const userCheckIns = dataStore.getCheckIns(currentUser.id);
-    
-    setGoals(allGoals);
-    setCheckIns(userCheckIns);
+    let cancelled = false;
+    const loadData = async () => {
+      try {
+        const [allGoals, userCheckIns] = await Promise.all([
+          api.getGoals(),
+          api.getCheckIns(),
+        ]);
+        if (cancelled) return;
+        setGoals(allGoals);
+        setCheckIns(userCheckIns);
+      } catch (error) {
+        console.error('加载个人数据失败', error);
+        toast.error('加载个人数据失败，请稍后再试');
+      }
+    };
+    loadData();
+    return () => {
+      cancelled = true;
+    };
   }, [currentUser.id]);
   
   // Calculate stats

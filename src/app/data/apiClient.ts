@@ -17,6 +17,9 @@ import type {
 const BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
   "";
+/** Supabase anon key：调用 Edge Function 时网关要求带此 header，否则返回 401 */
+const ANON_KEY =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || "";
 
 let authToken: string | null = null;
 let devUserId: string | null = null;
@@ -31,7 +34,9 @@ export function setDevUserId(userId: string | null) {
 
 function headers(): HeadersInit {
   const h: Record<string, string> = { "Content-Type": "application/json" };
+  // Supabase 网关要求带 Authorization，否则 401；有 JWT 用 JWT，否则用 anon key
   if (authToken) h["Authorization"] = `Bearer ${authToken}`;
+  else if (ANON_KEY) h["Authorization"] = `Bearer ${ANON_KEY}`;
   if (devUserId) h["X-User-Id"] = devUserId;
   return h;
 }
@@ -67,7 +72,7 @@ async function del(path: string): Promise<void> {
   if (!r.ok) throw new Error(await r.text().catch(() => r.statusText));
 }
 
-const P = "/make-server-129677f0";
+const P = "";
 
 export const api = {
   getSession: () => get<{ user: User }>(`${P}/session`),
@@ -117,6 +122,9 @@ export const api = {
     get<{ userId: string; userName: string; userAvatar: string; score: number; rank: number }[]>(
       `${P}/challenges/${challengeId}/leaderboard`
     ),
+
+  shareCheckInToSocial: (checkInId: string) =>
+    post<SocialPost>(`${P}/social/posts`, { checkInId }),
 
   getSocialPosts: () => get<SocialPost[]>(`${P}/social/posts`),
   likePost: (postId: string) => post<{ likes: string[] }>(`${P}/posts/${postId}/like`),

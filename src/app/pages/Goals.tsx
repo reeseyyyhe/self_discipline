@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Target, Plus, TrendingUp, Calendar, Trash2, Circle, CheckCircle, MessageSquare, Pencil } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { dataStore, groupStore } from '../data/mockData';
-import { Goal, CheckIn } from '../types';
+import { Goal, CheckIn, Group } from '../types';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
@@ -14,12 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
 import { useAuth } from '../authContext';
+import { api } from '../data/apiClient';
 
 const emojiOptions = ['🏃', '🌅', '📚', '💪', '🧘', '✍️', '🎯', '🎨', '🎵', '🍎', '💧', '🚴'];
 
 export default function Goals() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
@@ -55,18 +57,29 @@ export default function Goals() {
     if (!isAuthenticated) {
       setGoals([]);
       setCheckIns([]);
+      setGroups([]);
       return;
     }
-    loadData();
+    void loadData();
   }, [isAuthenticated]);
   
-  const loadData = () => {
-    const allGoals = dataStore.getGoals();
-    const currentUserId = dataStore.getCurrentUser().id;
-    const allCheckIns = dataStore.getCheckIns(currentUserId);
-    
-    setGoals(allGoals);
-    setCheckIns(allCheckIns);
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [goalsRes, checkInsRes, groupsRes] = await Promise.all([
+        api.getGoals(),
+        api.getCheckIns(),
+        api.getGroups(),
+      ]);
+      setGoals(goalsRes);
+      setCheckIns(checkInsRes);
+      setGroups(groupsRes);
+    } catch (error) {
+      console.error('加载目标数据失败', error);
+      toast.error('加载目标数据失败，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const categoryLabels: Record<Goal['category'], string> = {
@@ -77,27 +90,34 @@ export default function Goals() {
     general: '通用',
   };
   
-  const handleAddGoal = () => {
+  const handleAddGoal = async () => {
     if (!newGoal.title.trim()) {
       toast.error('请输入目标名称');
       return;
     }
     
-    const goal: Goal = {
-      id: `goal-${Date.now()}`,
-      title: newGoal.title,
-      description: newGoal.description,
-      icon: newGoal.icon,
-      targetDays: newGoal.targetDays,
-      durationMinutes: Number.isFinite(newGoal.durationMinutes) && newGoal.durationMinutes > 0
-        ? newGoal.durationMinutes
-        : 30,
-      category: newGoal.category,
-      createdAt: new Date().toISOString(),
-    };
-    
-    dataStore.addGoal(goal);
-    loadData();
+    try {
+      const durationMinutes =
+        Number.isFinite(newGoal.durationMinutes) && newGoal.durationMinutes > 0
+          ? newGoal.durationMinutes
+          : 30;
+
+      await api.addGoal({
+        title: newGoal.title,
+        description: newGoal.description,
+        icon: newGoal.icon,
+        targetDays: newGoal.targetDays,
+        durationMinutes,
+        category: newGoal.category,
+      });
+      await loadData();
+      toast.success('目标添加成功！');
+    } catch (error) {
+      console.error('添加目标失败', error);
+      toast.error('添加目标失败，请稍后重试');
+      return;
+    }
+
     setIsAddDialogOpen(false);
     setNewGoal({
       title: '',
@@ -110,43 +130,52 @@ export default function Goals() {
     toast.success('目标添加成功！');
   };
   
-  const handleDeleteGoal = (goalId: string) => {
-    if (confirm('确定要删除这个目标吗？')) {
-      dataStore.deleteGoal(goalId);
-      loadData();
+  const handleDeleteGoal = async (goalId: string) => {
+    if (!confirm('确定要删除这个目标吗？')) return;
+    try {
+      await api.deleteGoal(goalId);
+      await loadData();
       toast.success('目标已删除');
+    } catch (error) {
+      console.error('删除目标失败', error);
+      toast.error('删除目标失败，请稍后重试');
     }
   };
   
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
     if (!selectedGoal) return;
     
     const today = new Date().toISOString().split('T')[0];
-    const existingCheckIn = checkIns.find(
-      (c) => c.goalId === selectedGoal.id && c.date === today
-    );
-    
-    const checkIn: CheckIn = {
-      id: `checkin-${Date.now()}`,
-      goalId: selectedGoal.id,
-      userId: dataStore.getCurrentUser().id,
-      date: today,
-      completed: true,
-      note: checkInForm.note,
-      mood: checkInForm.mood,
-      timestamp: new Date().toISOString(),
-    };
-    
-    dataStore.addCheckIn(checkIn);
-    
-    // Share to selected groups
-    if (checkInForm.shareToGroups.length > 0) {
-      checkInForm.shareToGroups.forEach((groupId) => {
-        groupStore.shareCheckInToGroup(groupId, checkIn);
+    try {
+      const newCheckIn = await api.addCheckIn({
+        goalId: selectedGoal.id,
+        date: today,
+        completed: true,
+        note: checkInForm.note,
+        mood: checkInForm.mood,
+        sharedGroupIds: checkInForm.shareToGroups,
       });
+
+      // Share to social (好友圈)
+      if (checkInForm.note.trim()) {
+        try {
+          await api.shareCheckInToSocial(newCheckIn.id);
+        } catch (error) {
+          console.error('分享到好友圈失败', error);
+        }
+      }
+
+      // Share to selected groups
+      if (checkInForm.shareToGroups.length > 0) {
+        await api.shareCheckIn(newCheckIn, checkInForm.shareToGroups);
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error('打卡失败', error);
+      toast.error('打卡失败，请稍后重试');
+      return;
     }
-    
-    loadData();
     setIsCheckInDialogOpen(false);
     setSelectedGoal(null);
     setCheckInForm({ note: '', mood: 'good', shareToGroups: [] });
@@ -208,28 +237,35 @@ export default function Goals() {
     setIsEditDialogOpen(true);
   };
   
-  const handleUpdateGoal = () => {
+  const handleUpdateGoal = async () => {
     if (!editingGoal) return;
     if (!editGoal.title.trim()) {
       toast.error('请输入目标名称');
       return;
     }
     
-    dataStore.updateGoal(editingGoal.id, {
-      title: editGoal.title,
-      description: editGoal.description,
-      icon: editGoal.icon,
-      targetDays: editGoal.targetDays,
-      durationMinutes:
-        Number.isFinite(editGoal.durationMinutes) && editGoal.durationMinutes > 0
-          ? editGoal.durationMinutes
-          : editingGoal.durationMinutes,
-      category: editGoal.category,
-    });
-    loadData();
-    setIsEditDialogOpen(false);
-    setEditingGoal(null);
-    toast.success('目标已更新');
+    const durationMinutes =
+      Number.isFinite(editGoal.durationMinutes) && editGoal.durationMinutes > 0
+        ? editGoal.durationMinutes
+        : editingGoal.durationMinutes;
+
+    try {
+      await api.updateGoal(editingGoal.id, {
+        title: editGoal.title,
+        description: editGoal.description,
+        icon: editGoal.icon,
+        targetDays: editGoal.targetDays,
+        durationMinutes,
+        category: editGoal.category,
+      });
+      await loadData();
+      setIsEditDialogOpen(false);
+      setEditingGoal(null);
+      toast.success('目标已更新');
+    } catch (error) {
+      console.error('更新目标失败', error);
+      toast.error('更新目标失败，请稍后重试');
+    }
   };
 
   return (
@@ -387,6 +423,12 @@ export default function Goals() {
             <Button asChild>
               <Link to="/login">去登录</Link>
             </Button>
+          </Card>
+        ) : isLoading ? (
+          <Card className="p-12 text-center">
+            <div className="text-6xl mb-4">⏳</div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">正在加载目标</h3>
+            <p className="text-gray-500">请稍候...</p>
           </Card>
         ) : goals.length === 0 ? (
           <Card className="p-12 text-center">
@@ -546,54 +588,45 @@ export default function Goals() {
                   分享到群组（可选）
                 </div>
               </Label>
-              {(() => {
-                const currentUser = dataStore.getCurrentUser();
-                const myGroups = groupStore.getUserGroups(currentUser.id);
-                
-                if (myGroups.length === 0) {
-                  return (
-                    <p className="text-sm text-gray-500 py-2">
-                      你还没有加入任何群组
-                    </p>
-                  );
-                }
-                
-                return (
-                  <div className="space-y-2 border rounded-lg p-3 max-h-40 overflow-y-auto">
-                    {myGroups.map((group) => {
-                      const isChecked = checkInForm.shareToGroups.includes(group.id);
-                      return (
-                        <div key={group.id} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`group-${group.id}`}
-                            checked={isChecked}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setCheckInForm({
-                                  ...checkInForm,
-                                  shareToGroups: [...checkInForm.shareToGroups, group.id],
-                                });
-                              } else {
-                                setCheckInForm({
-                                  ...checkInForm,
-                                  shareToGroups: checkInForm.shareToGroups.filter(id => id !== group.id),
-                                });
-                              }
-                            }}
-                          />
-                          <label
-                            htmlFor={`group-${group.id}`}
-                            className="flex items-center gap-2 flex-1 cursor-pointer"
-                          >
-                            <span className="text-lg">{group.avatar}</span>
-                            <span className="text-sm font-medium text-gray-900">{group.name}</span>
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              {groups.length === 0 ? (
+                <p className="text-sm text-gray-500 py-2">
+                  你还没有加入任何群组
+                </p>
+              ) : (
+                <div className="space-y-2 border rounded-lg p-3 max-h-40 overflow-y-auto">
+                  {groups.map((group) => {
+                    const isChecked = checkInForm.shareToGroups.includes(group.id);
+                    return (
+                      <div key={group.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`group-${group.id}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setCheckInForm({
+                                ...checkInForm,
+                                shareToGroups: [...checkInForm.shareToGroups, group.id],
+                              });
+                            } else {
+                              setCheckInForm({
+                                ...checkInForm,
+                                shareToGroups: checkInForm.shareToGroups.filter((id) => id !== group.id),
+                              });
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`group-${group.id}`}
+                          className="flex items-center gap-2 flex-1 cursor-pointer"
+                        >
+                          <span className="text-lg">{group.avatar}</span>
+                          <span className="text-sm font-medium text-gray-900">{group.name}</span>
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {checkInForm.shareToGroups.length > 0 && (
                 <p className="text-xs text-green-600 mt-1">
                   ✓ 将分享到 {checkInForm.shareToGroups.length} 个群组

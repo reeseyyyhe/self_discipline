@@ -5,7 +5,9 @@ import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
 import * as store from "./store.ts";
 
 const app = new Hono();
-const PREFIX = "/make-server-129677f0";
+// 按 Supabase 文档，Edge Function 收到的 path 形如 `/server/health`，
+// 其中 `server` 是函数名（slug），因此这里前缀应为 `/server`。
+const PREFIX = "/server";
 
 app.use("*", logger(console.log));
 app.use(
@@ -563,6 +565,41 @@ function getDayDiff(a: string, b: string): number {
 }
 
 // ----- Social -----
+app.post(PREFIX + "/social/posts", async (c) => {
+  const userId = requireAuth(c);
+  if (!userId) return c.json({ error: "Unauthorized" }, 401);
+  const body = await c.req.json<{ checkInId: string }>();
+  const checkInId = body.checkInId;
+  if (!checkInId) return c.json({ error: "checkInId required" }, 400);
+
+  const allCheckIns = await store.getCheckInsList();
+  const checkIn = allCheckIns.find((ci) => ci.id === checkInId && ci.userId === userId);
+  if (!checkIn) return c.json({ error: "Checkin not found" }, 404);
+  if (!checkIn.note || !checkIn.note.trim()) return c.json({ error: "Note required" }, 400);
+
+  const user = await store.getUser(userId);
+  if (!user) return c.json({ error: "User not found" }, 404);
+  const goal = await store.getGoal(userId, checkIn.goalId);
+  if (!goal) return c.json({ error: "Goal not found" }, 404);
+
+  const streak = await computeStreak(userId, checkIn.goalId);
+  const post: store.SocialPost = {
+    id: `post-${Date.now()}`,
+    userId: user.id,
+    userName: user.name,
+    userAvatar: user.avatar,
+    goalTitle: goal.title,
+    checkInStreak: streak,
+    note: checkIn.note ?? "",
+    mood: checkIn.mood ?? "good",
+    timestamp: new Date().toISOString(),
+    likes: [],
+    comments: [],
+  };
+  await store.addSocialPost(post);
+  return c.json(post);
+});
+
 app.get(PREFIX + "/social/posts", async (c) => {
   const userId = requireAuth(c);
   if (!userId) return c.json({ error: "Unauthorized" }, 401);

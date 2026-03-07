@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Calendar, TrendingUp, Award, Plus, Clock } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { dataStore } from '../data/mockData';
 import { Goal, CheckIn } from '../types';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -10,11 +9,14 @@ import { Progress } from '../components/ui/progress';
 import { useAuth } from '../authContext';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '../components/ui/chart';
 import { PieChart, Pie, Cell } from 'recharts';
+import { toast } from 'sonner';
+import { api } from '../data/apiClient';
 
 export default function Home() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [todayStats, setTodayStats] = useState({ completed: 0, total: 0 });
+  const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
   
   useEffect(() => {
@@ -26,20 +28,31 @@ export default function Home() {
       return;
     }
 
-    const allGoals = dataStore.getGoals();
-    const currentUserId = dataStore.getCurrentUser().id;
-    const allCheckIns = dataStore.getCheckIns(currentUserId);
-    
-    setGoals(allGoals);
-    setCheckIns(allCheckIns);
-    
-    // Calculate today's stats
-    const today = new Date().toISOString().split('T')[0];
-    const todayCheckIns = allCheckIns.filter((c) => c.date === today);
-    setTodayStats({
-      completed: todayCheckIns.filter((c) => c.completed).length,
-      total: allGoals.length,
-    });
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        const [goalsRes, checkInsRes] = await Promise.all([
+          api.getGoals(),
+          api.getCheckIns(),
+        ]);
+        setGoals(goalsRes);
+        setCheckIns(checkInsRes);
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayCheckIns = checkInsRes.filter((c) => c.date === todayStr);
+        setTodayStats({
+          completed: todayCheckIns.filter((c) => c.completed).length,
+          total: goalsRes.length,
+        });
+      } catch (error) {
+        console.error('加载首页数据失败', error);
+        toast.error('加载首页数据失败，请稍后重试');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void load();
   }, [isAuthenticated]);
   
   const getGoalStreak = (goalId: string) => {

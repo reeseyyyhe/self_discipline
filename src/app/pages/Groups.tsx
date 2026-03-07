@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { Plus, Users as UsersIcon, ChevronRight, Search } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { groupStore, dataStore } from '../data/mockData';
 import { Group } from '../types';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -14,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '../authContext';
+import { api } from '../data/apiClient';
 
 const groupAvatars = ['🌅', '💪', '📚', '🏃', '🧘', '✍️', '🎯', '🎨', '⚡', '🌟'];
 
@@ -22,7 +22,7 @@ export default function Groups() {
   const [allGroups, setAllGroups] = useState<Group[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const currentUser = dataStore.getCurrentUser();
+  const [isLoading, setIsLoading] = useState(false);
   const { isAuthenticated } = useAuth();
   
   const [newGroup, setNewGroup] = useState({
@@ -38,36 +38,47 @@ export default function Groups() {
       setAllGroups([]);
       return;
     }
-    loadGroups();
+    void loadGroups();
   }, [isAuthenticated]);
   
-  const loadGroups = () => {
-    const userGroups = groupStore.getUserGroups(currentUser.id);
-    const allGroupsList = groupStore.getGroups();
-    
-    setMyGroups(userGroups);
-    setAllGroups(allGroupsList);
+  const loadGroups = async () => {
+    try {
+      setIsLoading(true);
+      const [my, discover] = await Promise.all([
+        api.getGroups(),
+        api.discoverGroups(),
+      ]);
+      setMyGroups(my);
+      setAllGroups([...my, ...discover]);
+    } catch (error) {
+      console.error('加载群组数据失败', error);
+      toast.error('加载群组数据失败，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (!newGroup.name.trim()) {
       toast.error('请输入群组名称');
       return;
     }
     
-    const group: Group = {
-      id: `group-${Date.now()}`,
-      name: newGroup.name,
-      description: newGroup.description,
-      avatar: newGroup.avatar,
-      creatorId: currentUser.id,
-      memberIds: [currentUser.id],
-      createdAt: new Date().toISOString(),
-      category: newGroup.category,
-    };
-    
-    groupStore.createGroup(group);
-    loadGroups();
+    try {
+      await api.createGroup({
+        name: newGroup.name,
+        description: newGroup.description,
+        avatar: newGroup.avatar,
+        category: newGroup.category,
+      });
+      await loadGroups();
+      toast.success('群组创建成功！');
+    } catch (error) {
+      console.error('创建群组失败', error);
+      toast.error('创建群组失败，请稍后重试');
+      return;
+    }
+
     setIsCreateDialogOpen(false);
     setNewGroup({
       name: '',
@@ -75,20 +86,29 @@ export default function Groups() {
       avatar: '🎯',
       category: 'general',
     });
-    toast.success('群组创建成功！');
   };
   
-  const handleJoinGroup = (groupId: string) => {
-    groupStore.joinGroup(groupId, currentUser.id);
-    loadGroups();
-    toast.success('加入群组成功！');
+  const handleJoinGroup = async (groupId: string) => {
+    try {
+      await api.joinGroup(groupId);
+      await loadGroups();
+      toast.success('加入群组成功！');
+    } catch (error) {
+      console.error('加入群组失败', error);
+      toast.error('加入群组失败，请稍后重试');
+    }
   };
   
-  const handleLeaveGroup = (groupId: string) => {
+  const handleLeaveGroup = async (groupId: string) => {
     if (!confirm('确定要退出该群组吗？')) return;
-    groupStore.leaveGroup(groupId, currentUser.id);
-    loadGroups();
-    toast.success('已退出群组');
+    try {
+      await api.leaveGroup(groupId);
+      await loadGroups();
+      toast.success('已退出群组');
+    } catch (error) {
+      console.error('退出群组失败', error);
+      toast.error('退出群组失败，请稍后重试');
+    }
   };
   
   const filteredGroups = allGroups.filter((group) => {
@@ -244,6 +264,12 @@ export default function Groups() {
                 <Button asChild>
                   <Link to="/login">去登录</Link>
                 </Button>
+              </Card>
+            ) : isLoading ? (
+              <Card className="p-12 text-center">
+                <div className="text-6xl mb-4">⏳</div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">正在加载群组</h3>
+                <p className="text-gray-500">请稍候...</p>
               </Card>
             ) : myGroups.length === 0 ? (
               <Card className="p-12 text-center">

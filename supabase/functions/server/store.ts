@@ -2,7 +2,7 @@
  * KV-backed store for 自律目标监控 app.
  * Keys: users, goals:{userId}, checkins, groups, messages:{groupId}, challenges:{groupId}, social_posts
  */
-import * as kv from "./kv_store.tsx";
+import * as kv from "./kv_store.ts";
 
 const USERS = "users";
 const GOALS_PREFIX = "goals:";
@@ -287,6 +287,13 @@ export async function getSocialPostsList(): Promise<SocialPost[]> {
 
 export async function setSocialPostsList(list: SocialPost[]): Promise<void> {
   await setJson(SOCIAL_POSTS, list);
+}
+
+export async function addSocialPost(post: SocialPost): Promise<SocialPost> {
+  const list = await getSocialPostsList();
+  list.push(post);
+  await setSocialPostsList(list);
+  return post;
 }
 
 export async function updateSocialPost(

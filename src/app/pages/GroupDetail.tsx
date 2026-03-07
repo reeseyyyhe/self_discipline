@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import { ArrowLeft, Send, Trophy, BarChart3, MessageCircle, Plus, Crown, Medal, Award } from 'lucide-react';
-import { groupStore, dataStore } from '../data/mockData';
 import { Group, GroupMessage, GroupChallenge, MemberDailyStats } from '../types';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -14,6 +13,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { useAuth } from '../authContext';
+import { api } from '../data/apiClient';
 
 export default function GroupDetail() {
   const { groupId } = useParams();
@@ -24,7 +24,7 @@ export default function GroupDetail() {
   const [challenges, setChallenges] = useState<GroupChallenge[]>([]);
   const [isCreateChallengeOpen, setIsCreateChallengeOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const currentUser = dataStore.getCurrentUser();
+  const { user: currentUser } = useAuth();
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
@@ -34,80 +34,80 @@ export default function GroupDetail() {
     type: 'total_checkins' as GroupChallenge['type'],
     durationDays: 7,
   });
+  const [isLoading, setIsLoading] = useState(false);
   
   useEffect(() => {
-    if (groupId) {
-      loadGroupData();
-    }
-  }, [groupId]);
+    if (!groupId || !isAuthenticated) return;
+    void loadGroupData();
+  }, [groupId, isAuthenticated]);
   
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
   
-  const loadGroupData = () => {
+  const loadGroupData = async () => {
     if (!groupId) return;
-    
-    const groupData = groupStore.getGroup(groupId);
-    const groupMessages = groupStore.getGroupMessages(groupId);
-    const today = new Date().toISOString().split('T')[0];
-    const stats = groupStore.getGroupDailyStats(groupId, today);
-    const groupChallenges = groupStore.getGroupChallenges(groupId);
-    
-    setGroup(groupData || null);
-    setMessages(groupMessages);
-    setDailyStats(stats);
-    setChallenges(groupChallenges);
+    try {
+      setIsLoading(true);
+      const [groupData, groupMessages, stats, groupChallenges] = await Promise.all([
+        api.getGroup(groupId),
+        api.getGroupMessages(groupId),
+        api.getGroupStats(groupId),
+        api.getGroupChallenges(groupId),
+      ]);
+      setGroup(groupData || null);
+      setMessages(groupMessages);
+      setDailyStats(stats);
+      setChallenges(groupChallenges);
+    } catch (error) {
+      console.error('加载群组数据失败', error);
+      toast.error('加载群组数据失败，请稍后重试');
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!newMessage.trim() || !groupId) return;
-    
-    const message: GroupMessage = {
-      id: `msg-${Date.now()}`,
-      groupId,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      content: newMessage,
-      type: 'text',
-      timestamp: new Date().toISOString(),
-    };
-    
-    groupStore.sendMessage(message);
-    setNewMessage('');
-    loadGroupData();
+    try {
+      await api.sendMessage(groupId, newMessage, 'text');
+      setNewMessage('');
+      await loadGroupData();
+    } catch (error) {
+      console.error('发送消息失败', error);
+      toast.error('发送消息失败，请稍后重试');
+    }
   };
   
-  const handleCreateChallenge = () => {
+  const handleCreateChallenge = async () => {
     if (!newChallenge.title.trim() || !groupId) {
       toast.error('请填写活动标题');
       return;
     }
     
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + newChallenge.durationDays);
-    
-    const challenge: GroupChallenge = {
-      id: `challenge-${Date.now()}`,
-      groupId,
-      title: newChallenge.title,
-      description: newChallenge.description,
-      type: newChallenge.type,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      creatorId: currentUser.id,
-      participants: [],
-      status: 'active',
-    };
-    
-    groupStore.createChallenge(challenge);
-    loadGroupData();
+    try {
+      await api.createChallenge({
+        groupId,
+        title: newChallenge.title,
+        description: newChallenge.description,
+        type: newChallenge.type,
+        startDate: '',
+        endDate: '',
+        creatorId: '',
+        participants: [],
+        status: 'active',
+        durationDays: newChallenge.durationDays,
+      });
+      await loadGroupData();
+    } catch (error) {
+      console.error('创建活动失败', error);
+      toast.error('创建活动失败，请稍后重试');
+      return;
+    }
     setIsCreateChallengeOpen(false);
     setNewChallenge({
       title: '',
@@ -118,11 +118,16 @@ export default function GroupDetail() {
     toast.success('活动创建成功！');
   };
   
-  const handleJoinChallenge = (challengeId: string) => {
-    groupStore.joinChallenge(challengeId, currentUser.id);
-    loadGroupData();
-    toast.success('参加活动成功！已为你创建对应的目标');
-    navigate('/goals');
+  const handleJoinChallenge = async (challengeId: string) => {
+    try {
+      await api.joinChallenge(challengeId);
+      await loadGroupData();
+      toast.success('参加活动成功！已为你创建对应的目标');
+      navigate('/goals');
+    } catch (error) {
+      console.error('参加活动失败', error);
+      toast.error('参加活动失败，请稍后重试');
+    }
   };
   
   const formatTime = (timestamp: string) => {
@@ -207,6 +212,14 @@ export default function GroupDetail() {
     );
   }
 
+  if (isLoading && !group) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500">正在加载群组...</p>
+      </div>
+    );
+  }
+
   if (!group) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -215,8 +228,8 @@ export default function GroupDetail() {
     );
   }
   
-  const isCreator = group.creatorId === currentUser.id;
-  const isMember = group.memberIds.includes(currentUser.id);
+  const isCreator = currentUser ? group.creatorId === currentUser.id : false;
+  const isMember = currentUser ? group.memberIds.includes(currentUser.id) : false;
   
   return (
     <div className="min-h-screen bg-gray-50 pb-4">
@@ -474,38 +487,33 @@ export default function GroupDetail() {
             <Card className="p-4">
               <h3 className="font-semibold text-gray-900 mb-3">成员列表</h3>
               <div className="space-y-3">
-                {group.memberIds.map((memberId) => {
-                  const member = dataStore.getUsers().find((u) => u.id === memberId);
-                  const memberStat = dailyStats.find((s) => s.userId === memberId);
-                  
-                  if (!member) return null;
-                  
-                  return (
-                    <div key={memberId} className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback>{member.name[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-900">{member.name}</p>
-                          {memberId === group.creatorId && (
-                            <Crown className="w-4 h-4 text-yellow-500" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500">{member.bio}</p>
+                {dailyStats.map((stat) => (
+                  <div key={stat.userId} className="flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
+                      <AvatarImage src={stat.userAvatar} alt={stat.userName} />
+                      <AvatarFallback>{stat.userName[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">{stat.userName}</p>
+                        {stat.userId === group.creatorId && (
+                          <Crown className="w-4 h-4 text-yellow-500" />
+                        )}
                       </div>
-                      {memberStat && memberStat.currentStreak > 0 && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 rounded-full">
-                          <span className="text-orange-600">🔥</span>
-                          <span className="text-sm font-medium text-orange-700">
-                            {memberStat.currentStreak}
-                          </span>
-                        </div>
-                      )}
+                      <p className="text-xs text-gray-500">
+                        完成 {stat.completedCount}/{stat.totalGoals} · 连续 {stat.currentStreak} 天
+                      </p>
                     </div>
-                  );
-                })}
+                    {stat.currentStreak > 0 && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 rounded-full">
+                        <span className="text-orange-600">🔥</span>
+                        <span className="text-sm font-medium text-orange-700">
+                          {stat.currentStreak}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </Card>
           </TabsContent>
